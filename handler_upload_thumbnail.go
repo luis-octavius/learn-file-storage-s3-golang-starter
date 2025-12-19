@@ -1,8 +1,11 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -46,19 +49,35 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 
 	defer file.Close()
 
-	fileExtension := strings.Split(header.Header.Get("Content-Type"), "/")[1]
+	mediaType, _, err := mime.ParseMediaType(header.Header.Get("Content-Type"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Error parsing media type from Content-Type Header", err)
+		return
+	}
+
+	if mediaType != "image/jpeg" && mediaType != "image/png" {
+		respondWithError(w, http.StatusBadRequest, "Media type is not jpeg or png", err)
+		return
+	}
+
+	fileExtension := strings.Split(mediaType, "/")[1]
 
 	// img data converted to a slice of bytes
 	fileData, err := io.ReadAll(file)
 
-	// construct the file path to save in file system
+	// construct the file path to save the file in file system
 	absPath, err := filepath.Abs(cfg.assetsRoot)
-	fmt.Println("Upload Thumbnail: Absolute Path: ", absPath)
-	path := videoIDString + "." + fileExtension
-	fmt.Println("Upload Thumbnail: Path: ", absPath)
+
+	b := make([]byte, 32)
+	rand.Read(b)
+
+	encodedString := base64.RawURLEncoding.EncodeToString(b)
+	fmt.Println("encodedString file string: ", encodedString)
+
+	path := encodedString + "." + fileExtension
 
 	filePath := filepath.Join(absPath, path)
-	fmt.Println("Upload Thumbnail: File Path: ", filePath)
+	fmt.Println("file path: ", filePath)
 
 	newFile, err := os.Create(filePath)
 	if err != nil {
@@ -66,6 +85,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// copy the contents of the data into the new file created in file system
 	_, err = io.Copy(newFile, strings.NewReader(string(fileData)))
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Error copying the contents of file data into the new file in file system", err)
@@ -78,7 +98,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	dbThumbnailURL := "http://localhost:" + cfg.port + "/assets/" + videoIDString + "." + fileExtension
+	dbThumbnailURL := "http://localhost:" + cfg.port + "/assets/" + encodedString + "." + fileExtension
 
 	videoMetadata.ThumbnailURL = &dbThumbnailURL
 
