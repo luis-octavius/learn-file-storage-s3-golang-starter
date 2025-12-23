@@ -75,8 +75,6 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	fmt.Println("Temp Dir: ", os.TempDir())
-
 	defer tempFile.Close()
 	defer os.Remove(tempFile.Name())
 
@@ -93,7 +91,21 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	fmt.Println("tempFile path: ", tempFile.Name())
+	// create a processed version of the video to load faster
+	processedVideo, err := processVideoForFastStart(tempFile.Name())
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Error processing video: %v", err)
+		return
+	}
+	fmt.Println("processed video: ", processedVideo)
+
+	processedFile, err := os.Open(processedVideo)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Error opening the processed video: %v", err)
+		return
+	}
+
+	defer processedFile.Close()
 
 	// check the aspect ratio of the video
 	aspectRatio, err := getVideoAspectRatio(tempFile.Name())
@@ -113,7 +125,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		folderPrefix = "other"
 	}
 
-	// created a file name with the extension
+	// create a file name with the extension
 	fileExtension := strings.Split(mediaType, "/")[1]
 
 	b := make([]byte, 32)
@@ -129,7 +141,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	putObject := s3.PutObjectInput{
 		Bucket:      &cfg.s3Bucket,
 		Key:         &fileKey,
-		Body:        tempFile,
+		Body:        processedFile,
 		ContentType: &mediaType,
 	}
 	_, err = cfg.s3Client.PutObject(context.Background(), &putObject)
@@ -140,7 +152,6 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 
 	// structure the URL of the video in S3 Bucket
 	videoURL := "https://" + cfg.s3Bucket + ".s3." + cfg.s3Region + ".amazonaws.com/" + fileKey
-	log.Println("videoURL: ", videoURL)
 
 	videoMetadata.VideoURL = &videoURL
 
