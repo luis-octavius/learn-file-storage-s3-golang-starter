@@ -72,7 +72,6 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	rand.Read(b)
 
 	encodedString := base64.RawURLEncoding.EncodeToString(b)
-	fmt.Println("encodedString file string: ", encodedString)
 
 	path := encodedString + "." + fileExtension
 

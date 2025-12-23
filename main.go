@@ -1,10 +1,13 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
 
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/database"
 
 	"github.com/joho/godotenv"
@@ -18,6 +21,7 @@ type apiConfig struct {
 	filepathRoot     string
 	assetsRoot       string
 	s3Bucket         string
+	s3Client         *s3.Client
 	s3Region         string
 	s3CfDistribution string
 	port             string
@@ -95,6 +99,14 @@ func main() {
 		port:             port,
 	}
 
+	defaultCfg, err := config.LoadDefaultConfig(context.Background(), config.WithRegion(cfg.s3Region))
+	if err != nil {
+		log.Fatal("Couldn't load default config: %v", err)
+	}
+
+	client := s3.NewFromConfig(defaultCfg)
+	cfg.s3Client = client
+
 	err = cfg.ensureAssetsDir()
 	if err != nil {
 		log.Fatalf("Couldn't create assets directory: %v", err)
@@ -105,7 +117,7 @@ func main() {
 	mux.Handle("/app/", appHandler)
 
 	assetsHandler := http.StripPrefix("/assets", http.FileServer(http.Dir(assetsRoot)))
-	mux.Handle("/assets/", cacheMiddleware(assetsHandler))
+	mux.Handle("/assets/", noCacheMiddleware(assetsHandler))
 
 	mux.HandleFunc("POST /api/login", cfg.handlerLogin)
 	mux.HandleFunc("POST /api/refresh", cfg.handlerRefresh)
