@@ -84,6 +84,8 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	fmt.Println("VideoURL: ", videoMetadata.VideoURL)
+
 	// copy the contents of the file from the form to the temporary file
 	_, err = io.Copy(tempFile, strings.NewReader(string(fileData)))
 	if err != nil {
@@ -132,7 +134,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	rand.Read(b)
 	encodedString := base64.RawURLEncoding.EncodeToString(b)
 
-	fileKey := folderPrefix + "/" + encodedString + "." + fileExtension
+	fileKey := cfg.s3Bucket + "," + folderPrefix + "/" + encodedString + "." + fileExtension
 	log.Println("filekey: ", fileKey)
 
 	// resets the temp file to the beginning
@@ -152,8 +154,20 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 
 	// structure the URL of the video in S3 Bucket
 	videoURL := "https://" + cfg.s3Bucket + ".s3." + cfg.s3Region + ".amazonaws.com/" + fileKey
+	// video, err := cfg.dbVideoToSignedVideo(videoMetadata)
+	// if err != nil {
+	// 	respondWithError(w, http.StatusBadRequest, "Unable to get signed video: %v", err)
+	// 	return
+	// }
 
 	videoMetadata.VideoURL = &videoURL
+	fmt.Println("video URL: ", *videoMetadata.VideoURL)
+
+	updatedVideo, err := cfg.dbVideoToSignedVideo(videoMetadata)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Error in dbVideoToSignedVideo: %v", err)
+		return
+	}
 
 	err = cfg.db.UpdateVideo(videoMetadata)
 	if err != nil {
@@ -161,5 +175,5 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	respondWithJSON(w, http.StatusOK, videoMetadata)
+	respondWithJSON(w, http.StatusOK, updatedVideo)
 }

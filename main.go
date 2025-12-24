@@ -101,7 +101,7 @@ func main() {
 
 	defaultCfg, err := config.LoadDefaultConfig(context.Background(), config.WithRegion(cfg.s3Region))
 	if err != nil {
-		log.Fatal("Couldn't load default config: %v", err)
+		log.Printf("Couldn't load default config: %v", err)
 	}
 
 	client := s3.NewFromConfig(defaultCfg)
